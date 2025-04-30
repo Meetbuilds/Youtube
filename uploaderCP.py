@@ -42,37 +42,42 @@ def save_uploaded_videos(uploaded_videos, tracking_file):
 
 # Function: Authenticate per Channel
 
+# ------------------------------
+# Function: Authenticate per Channel (FIXED)
+# ------------------------------
+
 def authenticate_channel(client_secrets_file, token_file):
-    """Authenticates a channel using its client secrets and token files."""
-    #os.makedirs(os.path.dirname(token_file), exist_ok=True)
-    #os.makedirs(os.path.dirname(client_secrets_file), exist_ok=True)
-
-    credentials = None
-    if not os.path.exists(client_secrets_file):
-     raise FileNotFoundError(f"Client secrets file {client_secrets_file} missing!")
-
-    if os.path.exists(token_file):
-        credentials = Credentials.from_authorized_user_file(token_file, SCOPES)
+    """Authenticates a channel with automatic token management"""
+    # Ensure directories exist for token files
+    os.makedirs(os.path.dirname(token_file), exist_ok=True)
     
+    credentials = None
+    
+    # Load existing credentials if available
+    if os.path.exists(token_file):
+        try:
+            credentials = Credentials.from_authorized_user_file(token_file, SCOPES)
+        except ValueError as e:
+            logging.warning(f"Invalid token file: {e}. Re-authenticating.")
+
+    # Refresh or get new credentials
     if not credentials or not credentials.valid:
         if credentials and credentials.expired and credentials.refresh_token:
             try:
                 credentials.refresh(Request())
-            except Exception as e:
-                print("Token refresh failed:", e)
-                flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, SCOPES)
-                credentials = flow.run_local_server(port=0)
-                with open(token_file, "w") as f:
-                    f.write(credentials.to_json())
-        else:
+            except Exception as refresh_error:
+                logging.warning(f"Token refresh failed: {refresh_error}. Starting new flow.")
+                credentials = None
+
+        if not credentials:
             flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, SCOPES)
             credentials = flow.run_local_server(port=0)
-            with open(token_file, "w") as f:
-                f.write(credentials.to_json())
-    
-    youtube = build("youtube", "v3", credentials=credentials)
-    return youtube
+            
+            # Save new credentials
+            with open(token_file, "w") as token:
+                token.write(credentials.to_json())
 
+    return build("youtube", "v3", credentials=credentials)
 # Function: Check Folder Upload Status
 
 def check_folder_upload_status(folder_path, uploaded_videos):
@@ -169,7 +174,7 @@ def main():
                "channel_id": "shutterclips",
                "channel_url" : "https://www.youtube.com/channel/UCUj8fHYxqJwtwKVt8YHxMgg",
                "client_secrets_file": r"C:\Users\meetd\Desktop\YT root\auth\shutterclips_client_secret.json",
-               "token_file": r"C:\Users\meetd\Desktop\YT root\auth\shutterclips_token",
+               "token_file": r"C:\Users\meetd\Desktop\YT root\auth\shutterclips_token.json",
                "source_folder": r"C:\Users\meetd\Desktop\YT root\Media\Shows - Young sheldon, BBT",
                "use_filename_as_title": True,
                "default_title": "The Big Bang Theory #shorts # youngsheldon #BBT #TVShow",
@@ -183,7 +188,7 @@ def main():
                "channel_id": "clipper644",
                "channel_url" : "https://www.youtube.com/channel/UCZVwI-TV4eA2HjYwoiLjefg",
                "client_secrets_file": r"C:\Users\meetd\Desktop\YT root\auth\clipper644_client_secret.json",
-               "token_file": r"C:\Users\meetd\Desktop\YT root\auth\clipper644_token",
+               "token_file": r"C:\Users\meetd\Desktop\YT root\auth\clipper644_token.json",
                "source_folder": r"C:\Users\meetd\Desktop\YT root\Media\Shows - station19, lucifer, brba, bcs, mr. inbetween",
                "use_filename_as_title": True,
                "default_title": "Bay harbour cooker vs lawyer. #shorts #Jesse #Walter #TVShow",
@@ -197,7 +202,7 @@ def main():
                "channel_id": "superheromania646",
                "channel_url" : "https://www.youtube.com/channel/UC_T7Wn0_bN-_tSoj2OlOB1Q",
                "client_secrets_file": r"C:\Users\meetd\Desktop\YT root\auth\superheromania646_client_secret.json",
-               "token_file": r"C:\Users\meetd\Desktop\YT root\auth\superheromania646_token",
+               "token_file": r"C:\Users\meetd\Desktop\YT root\auth\superheromania646_token.json",
                "source_folder": r"C:\Users\meetd\Desktop\YT root\Media\Marvels",
                "use_filename_as_title": True,
                "default_title": "Marvel Cinematic Universe #ironman #Tony #Superhero",
@@ -211,8 +216,8 @@ def main():
     
     for config in channels_config:
 
-        config["client_secrets_file"] = f"C:/Users/meetd/Desktop/YT root/auth/{config['channel_id']}_client_secret.json"
-        config["token_file"] = f"C:/Users/meetd/Desktop/YT root/auth/{config['channel_id']}_token.json"
+       # config["client_secrets_file"] = f"C:/Users/meetd/Desktop/YT root/auth/{config['channel_id']}_client_secret.json"
+       # config["token_file"] = f"C:/Users/meetd/Desktop/YT root/auth/{config['channel_id']}_token.json"
 
         channel_id = config["channel_url"].split("/")[-1]
         TRACKING_FILE = f"uploaded_videos_{channel_id}.json"
