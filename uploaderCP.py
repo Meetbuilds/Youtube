@@ -57,27 +57,26 @@ def authenticate_channel(client_secrets_file, token_file):
     if os.path.exists(token_file):
         try:
             credentials = Credentials.from_authorized_user_file(token_file, SCOPES)
-        except ValueError as e:
-            logging.warning(f"Invalid token file: {e}. Re-authenticating.")
-
-    # Refresh or get new credentials
-    if not credentials or not credentials.valid:
-        if credentials and credentials.expired and credentials.refresh_token:
-            try:
+            # Auto-refresh if expired
+            if credentials.expired and credentials.refresh_token:
                 credentials.refresh(Request())
-            except Exception as refresh_error:
-                logging.warning(f"Token refresh failed: {refresh_error}. Starting new flow.")
-                credentials = None
+        except Exception as e:
+            logging.error(f"Authentication failed: {str(e)}")
+            logging.critical("Manual re-authentication required! Delete token file and restart.")
+            raise SystemExit("Authentication failure") from e
 
-        if not credentials:
-            flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, SCOPES)
-            credentials = flow.run_local_server(port=0)
-            
-            # Save new credentials
-            with open(token_file, "w") as token:
-                token.write(credentials.to_json())
+    # First-time authentication
+    if not credentials:
+        flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, SCOPES)
+        credentials = flow.run_local_server(port=0)
+        with open(token_file, "w") as token:
+            token.write(credentials.to_json())
 
     return build("youtube", "v3", credentials=credentials)
+
+
+
+
 # Function: Check Folder Upload Status
 
 def check_folder_upload_status(folder_path, uploaded_videos):
