@@ -76,7 +76,6 @@ def authenticate_channel(client_secrets_file, token_file):
 
 
 
-
 # Function: Check Folder Upload Status
 
 def check_folder_upload_status(folder_path, uploaded_videos):
