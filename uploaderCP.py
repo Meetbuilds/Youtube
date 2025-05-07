@@ -40,10 +40,9 @@ def save_uploaded_videos(uploaded_videos, tracking_file):
          json.dump(list(uploaded_videos), f)
 
 
-# Function: Authenticate per Channel
 
 # ------------------------------
-# Function: Authenticate per Channel (FIXED)
+# Function: Authenticate per Channel
 # ------------------------------
 
 def authenticate_channel(client_secrets_file, token_file):
@@ -149,8 +148,7 @@ def upload_video(youtube, file_path, config, title, description, tags, privacy_s
 # Main Function
 
 def main():
-            
-    # Channel configuration
+        
     
     channels_config = [
         
@@ -161,7 +159,7 @@ def main():
                "token_file": r"C:\Users\meetd\Desktop\YT root\auth\clipper645_token.json",
                "use_filename_as_title": False,
                "source_folder": r"C:\Users\meetd\Desktop\YT root\Media\The rookie",
-               "default_title": "The Rookie #TheRookieSeason7 #Chenford #TVShow",
+               "default_title": "The Rookie #TVShow",
                "default_description": "Check out my new video on 'The Rookie'.... #CrimeDrama #PoliceDrama #TVShow #TheRookieSeason7 #Chenford #TheRookieABC",
                "tags": ["CrimeDrama", "PoliceDrama", "TVShow", "TheRookieSeason7", "Chenford", "TheRookieABC"],
                "privacy_status": "public",
@@ -214,8 +212,6 @@ def main():
     
     for config in channels_config:
 
-       # config["client_secrets_file"] = f"C:/Users/meetd/Desktop/YT root/auth/{config['channel_id']}_client_secret.json"
-       # config["token_file"] = f"C:/Users/meetd/Desktop/YT root/auth/{config['channel_id']}_token.json"
 
         channel_id = config["channel_url"].split("/")[-1]
         TRACKING_FILE = f"uploaded_videos_{channel_id}.json"
