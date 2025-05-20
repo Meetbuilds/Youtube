@@ -216,23 +216,6 @@ def download_video(video_url, download_path, max_retries):
                 logging.error(f"Failed {video_url}: {str(e)}")
             time.sleep(min(2 ** retry, 5))
     
-
-    while retries < max_retries:
-        try:
-            user_agent = random.choice([
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15"
-            ])
-            download_opts['http_headers'] = {'User-Agent': user_agent}
-
-            with yt_dlp.YoutubeDL(download_opts) as ydl:
-                ydl.download([video_url])
-                logging.info(f"Download success: {video_url}")
-                mark_video_downloaded(channel_id, video_id)
-                
-                with download_lock:
-                    successful_downloads += 1
-                return
             
         except Exception as e:
             retries += 1
@@ -243,12 +226,6 @@ def download_video(video_url, download_path, max_retries):
         failed_downloads += 1
     logging.error(f"Permanent failure for {video_url}")
 
-    # Final verification
-    if not actually_downloaded:
-        expected_file = os.path.join(download_path, f"{sanitized_title}_{video_id}.mp4")
-        if os.path.exists(expected_file):
-            actually_downloaded = True
-
     # Update counters
     with download_lock:
         if actually_downloaded:
@@ -257,12 +234,6 @@ def download_video(video_url, download_path, max_retries):
             failed_downloads += 1
             logging.error(f"Permanent failure for {video_url}")
 
-    # Cleanup temporary files
-    if os.path.exists(final_filename):
-        try:
-            os.remove(final_filename)
-        except Exception as e:
-            logging.error(f"Failed to clean up temp file: {str(e)}")
     
 if __name__ == "__main__":
     # Get user inputs
@@ -270,7 +241,7 @@ if __name__ == "__main__":
     download_path = input("Enter download path: ").strip()
     os.makedirs(download_path, exist_ok=True)
     max_threads = 10
-
+    max_retries = 3
     # Channel tracking setup
     channel_id = get_channel_id(channel_url)
     
