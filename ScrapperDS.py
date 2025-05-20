@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from concurrent.futures import as_completed
 
+#print(f"Download path: {os.path.abspath(download_path)}")  
 
 # Configure logging
 logging.basicConfig(
@@ -26,28 +27,38 @@ successful_downloads = 0
 failed_downloads = 0
 
 # Auto-create history directory
-HISTORY_DIR = r"C:\Users\meetd\Desktop\YT root\source code"
+HISTORY_DIR = r"C:\Users\meetd\Desktop\YT root\Core"
 os.makedirs(HISTORY_DIR, exist_ok=True)
 
-DOWNLOAD_HISTORY_FILE = r"C:\Users\meetd\Desktop\YT root\source code\download_history.log"
-CHANNEL_HISTORY_FILE = r"C:\Users\meetd\Desktop\YT root\source code\channel_history.json"
+DOWNLOAD_HISTORY_FILE = r"C:\Users\meetd\Desktop\YT root\Core\download_history.log"
+CHANNEL_HISTORY_FILE = r"C:\Users\meetd\Desktop\YT root\Core\channel_history.json"
 
+def load_history():
+    if Path(CHANNEL_HISTORY_FILE).exists():
+        with open(CHANNEL_HISTORY_FILE, 'r') as f:
+            return json.load(f) or {}
+    return {}
 
+def is_video_downloaded(channel_id, video_id):
+    """Check if video exists in history"""
+    history = load_history()
+    return video_id in history.get(channel_id, []) 
+
+def mark_video_downloaded(channel_id, video_id):
+    data = load_history()
+    data.setdefault(channel_id, []).append(video_id)
+    with open(CHANNEL_HISTORY_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
 
 # Duplicate Check
 
-def is_video_downloaded(video_id):
-    """Check if video was previously downloaded"""
-    Path(DOWNLOAD_HISTORY_FILE).touch(exist_ok=True)
-    with open(DOWNLOAD_HISTORY_FILE, 'r') as f:
-        return video_id in f.read()
 
 def log_downloaded_video(video_id):
     """Record downloaded video ID"""
     with open(DOWNLOAD_HISTORY_FILE, 'a') as f:
         f.write(f"{video_id}\n")
 
-
+DOWNLOAD_HISTORY_FILE
 #Channel Tracker
 
 def get_channel_id(url):
@@ -81,7 +92,8 @@ def filter_new_videos(channel_id, video_urls):
     filtered = []
     for url in video_urls:
         vid = extract_video_id(url)
-        if not is_video_downloaded(vid) and vid not in get_channel_history(channel_id):
+        if not is_video_downloaded(channel_id, vid):
+
             filtered.append(url)
     return filtered
 # ---------------------------
@@ -93,7 +105,6 @@ def extract_video_id(url):
     match = re.search(regex, url)
     return match.group(1) if match else None
 
-   
 def validate_url(url):
     """Ensure URL is in correct format for Shorts extraction"""
     url = url.strip()
@@ -128,7 +139,10 @@ def fetch_video_urls(target_url, max_retries):
                 return []
 
             return [entry['url'] for entry in info['entries'] if entry]
-        
+            
+            if not is_video_downloaded(my_channel_id, vid_id):
+                download(vid_id)
+                mark_video_downloaded(my_channel_id, vid_id)
         except Exception as e:
             retries += 1
             logging.warning(f"Fetch error (Attempt {retries}/{max_retries}): {str(e)}")
@@ -150,42 +164,58 @@ def get_video_range(total_shorts):
         except ValueError:
             print("\033[91mPlease enter valid numbers.\033[0m")
 
+    
+
+global channel_id
 
 def download_video(video_url, download_path, max_retries):
+    """Final merged version"""
+    global successful_downloads, failed_downloads, channel_id
 
-    global successful_downloads, failed_downloads
     if not os.path.exists(download_path):
         os.makedirs(download_path, exist_ok=True)
 
     video_id = extract_video_id(video_url)
     
-    if is_video_downloaded(video_id):
+    if is_video_downloaded(channel_id, video_id):
         logging.info(f"Skipping duplicate: {video_id}")
         return
-
-    retries = 0
-    actually_downloaded = False
-    sanitized_title = "untitled"
-    final_filename = ""
-    new_path = ""
-
+    
     download_opts = {
-        'outtmpl': os.path.join(download_path, '%(title)s_%(id)s.%(ext)s'),        
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+        'outtmpl': os.path.join(download_path, '%(title)s_%(id)s.%(ext)s'),
+        # Optimized format selection for pre-merged files
+        'format': 'bestvideo[height<=1080][ext=mp4][vcodec^=avc1]+bestaudio/best[height<=1080][ext=mp4]',
         'merge_output_format': 'mp4',
-        'ignoreerrors': False,
         'retries': max_retries,
-        'fragment_retries': 3,
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4'  
-        }],
-        'nooverwrites': True,
-        'continuedl': True,
+        'fragment_retries': 2,
+        'concurrent_fragment_downloads': 8,  # Parallel fragment downloads
+        'http_chunk_size': 10485760,  # 10MB chunks for faster downloads
         'noprogress': True,
-        'fixup': 'warn',
-        'verbose': False
+        'nooverwrites': True,
+        'continuedl': False,
+        'throttledratelimit': 0,
+        'socket_timeout': 10,
+        'verbose': False,
+        'postprocessor_args': {'ffmpeg': ['-hide_banner', '-loglevel', 'error']},
+        'windowsfilenames': False,
+        'restrictfilenames': False
     }
+
+    for retry in range(max_retries):
+        try:
+            with yt_dlp.YoutubeDL(download_opts) as ydl:
+                ydl.download([video_url])
+                mark_video_downloaded(channel_id, video_id)
+                with download_lock:
+                    successful_downloads += 1
+                return
+        except Exception as e:
+            if retry == max_retries - 1:
+                with download_lock:
+                    failed_downloads += 1
+                logging.error(f"Failed {video_url}: {str(e)}")
+            time.sleep(min(2 ** retry, 5))
+    
 
     while retries < max_retries:
         try:
@@ -196,48 +226,22 @@ def download_video(video_url, download_path, max_retries):
             download_opts['http_headers'] = {'User-Agent': user_agent}
 
             with yt_dlp.YoutubeDL(download_opts) as ydl:
-                # Get video info first
-                info = ydl.extract_info(video_url, download=False)
-                if not info:
-                    raise Exception("Failed to extract video info")
-                
-                # Sanitize filename and prepare paths
-                sanitized_title = sanitize_filename(info.get('title', 'untitled'))
-                temp_filename = ydl.prepare_filename(info)  # e.g., "MyTitle_ABC123.mp4"
-                base_title = sanitize_filename(info.get('title', 'untitled'))
-                target_path = os.path.join(download_path, f"{base_title}.mp4")
-
-                # Collision-safe renaming logic
-                suffix = 1
-                while os.path.exists(target_path):
-                    target_path = os.path.join(download_path, f"{base_title} ({suffix}).mp4")
-                    suffix += 1
-
-
-                # Skip if already exists (race condition protection)
-                if os.path.exists(new_path):
-                    logging.info(f"File already exists: {new_path}")
-                    actually_downloaded = True
-                    break
-
-                                   # Perform actual download
                 ydl.download([video_url])
-
-                if not os.path.exists(temp_filename):
-                    raise FileNotFoundError("Download did not complete properly")
-
-                os.replace(temp_filename, target_path)
-                actually_downloaded = True
-
-
                 logging.info(f"Download success: {video_url}")
-                log_downloaded_video(video_id)
-                break
-
+                mark_video_downloaded(channel_id, video_id)
+                
+                with download_lock:
+                    successful_downloads += 1
+                return
+            
         except Exception as e:
             retries += 1
             logging.error(f"Download attempt {retries} failed for {video_url}: {str(e)}")
             time.sleep(min(2 ** retries, 15))
+
+    with download_lock:
+        failed_downloads += 1
+    logging.error(f"Permanent failure for {video_url}")
 
     # Final verification
     if not actually_downloaded:
@@ -260,14 +264,12 @@ def download_video(video_url, download_path, max_retries):
         except Exception as e:
             logging.error(f"Failed to clean up temp file: {str(e)}")
     
-    
 if __name__ == "__main__":
     # Get user inputs
     channel_url = input("\nEnter YouTube channel URL: ").strip()
     download_path = input("Enter download path: ").strip()
     os.makedirs(download_path, exist_ok=True)
-    max_threads = 5
-    max_retries = 3
+    max_threads = 10
 
     # Channel tracking setup
     channel_id = get_channel_id(channel_url)
@@ -340,7 +342,7 @@ if __name__ == "__main__":
                 try:
                     future.result()
                 except Exception as e:
-                    logging.error(f"Thread error: {str(e)}", extract_info=True)
+                    logging.error(f"Thread error: {str(e)}", exc_info=True )
                     with download_lock:
                        failed_downloads += 1
 
@@ -370,8 +372,7 @@ if __name__ == "__main__":
     downloaded_ids = []
     for url in selected_urls:
         vid = extract_video_id(url)
-        if vid and is_video_downloaded(vid):
+        if vid and is_video_downloaded(channel_id, vid):
             downloaded_ids.append(vid)
     
     update_channel_history(channel_id, downloaded_ids)
-
