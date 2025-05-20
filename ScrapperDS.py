@@ -33,9 +33,9 @@ DOWNLOAD_HISTORY_FILE = r"C:\Users\meetd\Desktop\YT root\source code\download_hi
 CHANNEL_HISTORY_FILE = r"C:\Users\meetd\Desktop\YT root\source code\channel_history.json"
 
 
-# ---------------------------
+
 # Duplicate Check
-# ---------------------------
+
 def is_video_downloaded(video_id):
     """Check if video was previously downloaded"""
     Path(DOWNLOAD_HISTORY_FILE).touch(exist_ok=True)
@@ -47,9 +47,9 @@ def log_downloaded_video(video_id):
     with open(DOWNLOAD_HISTORY_FILE, 'a') as f:
         f.write(f"{video_id}\n")
 
-# ---------------------------
+
 #Channel Tracker
-# ---------------------------
+
 def get_channel_id(url):
     """Extract channel ID from URL"""
     if '@' in url:  # Handle @username format
@@ -93,9 +93,6 @@ def extract_video_id(url):
     match = re.search(regex, url)
     return match.group(1) if match else None
 
-def sanitize_filename(title):
-     cleaned = re.sub(r'[^a-zA-Z0-9 \-_]', '', title)
-     return cleaned[:100]
    
 def validate_url(url):
     """Ensure URL is in correct format for Shorts extraction"""
@@ -173,7 +170,7 @@ def download_video(video_url, download_path, max_retries):
     new_path = ""
 
     download_opts = {
-        'outtmpl': f"{download_path}/%(title)s_%(id)s.%(ext)s",        
+        'outtmpl': os.path.join(download_path, '%(title)s_%(id)s.%(ext)s'),        
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
         'merge_output_format': 'mp4',
         'ignoreerrors': False,
@@ -183,8 +180,6 @@ def download_video(video_url, download_path, max_retries):
             'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4'  
         }],
-        'windowsfilenames': True,
-        'restrictfilenames': True,
         'nooverwrites': True,
         'continuedl': True,
         'noprogress': True,
@@ -345,7 +340,7 @@ if __name__ == "__main__":
                 try:
                     future.result()
                 except Exception as e:
-                    logging.error(f"Thread error: {str(e)}")
+                    logging.error(f"Thread error: {str(e)}", extract_info=True)
                     with download_lock:
                        failed_downloads += 1
 
